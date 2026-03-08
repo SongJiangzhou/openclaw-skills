@@ -71,17 +71,27 @@ function installSkill(name) {
   symlinkSync(src, dst);
 }
 
-function buildResultLines(names) {
-  const ok = [], fail = [];
+function installAll(names) {
+  const results = [];
   for (const name of names) {
     try {
       installSkill(name);
-      ok.push(`  ${color.green('✓')} ${name}`);
+      results.push({ name, ok: true });
     } catch (err) {
-      fail.push(`  ${color.red('✗')} ${name}  ${color.dim(err.message)}`);
+      results.push({ name, ok: false, err: err.message });
     }
   }
-  return { lines: [...ok, ...fail], success: ok.length, failed: fail.length };
+  return results;
+}
+
+function logResults(results) {
+  for (const { name, ok, err } of results) {
+    if (ok) {
+      p.log.success(name);
+    } else {
+      p.log.error(`${name}: ${color.dim(err)}`);
+    }
+  }
 }
 
 // Interactive mode
@@ -127,10 +137,12 @@ async function runInteractive() {
 
   const s = p.spinner();
   s.start(t.installing);
-  const { lines, success, failed } = buildResultLines(selected);
-  s.stop(t.done);
+  const results = installAll(selected);
+  const success = results.filter(r => r.ok).length;
+  const failed  = results.filter(r => !r.ok).length;
+  s.stop(failed > 0 ? t.outroFail(success, failed) : t.outroOk(success));
 
-  p.note(lines.join('\n'), t.results);
+  logResults(results);
 
   if (failed > 0) {
     p.outro(color.yellow(t.outroFail(success, failed)));
@@ -148,10 +160,12 @@ async function runCli(names) {
 
   const s = p.spinner();
   s.start(t.cliInstalling(names.length));
-  const { lines, success, failed } = buildResultLines(names);
-  s.stop(t.done);
+  const results = installAll(names);
+  const success = results.filter(r => r.ok).length;
+  const failed  = results.filter(r => !r.ok).length;
+  s.stop(failed > 0 ? t.outroFail(success, failed) : t.outroOk(success));
 
-  p.note(lines.join('\n'), t.results);
+  logResults(results);
 
   if (failed > 0) {
     p.outro(color.yellow(t.outroFail(success, failed)));
