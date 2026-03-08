@@ -73,18 +73,17 @@ install_skill() {
         return 1
     fi
 
-    if [ -d "$target_path" ]; then
-        echo "  → 删除旧版本: $skill_name"
+    if [ -e "$target_path" ]; then
+        echo "  → 删除旧链接: $skill_name"
         rm -rf "$target_path"
     fi
 
-    cp -r "$source_path" "$target_path"
-    echo "  ✓ 已安装: $skill_name"
+    ln -s "$source_path" "$target_path"
+    echo "  ✓ 已链接: $skill_name"
 }
 
 # 显示主菜单
 show_menu() {
-    clear
     echo "${BOLD}╔════════════════════════════════════════════════╗${NC}"
     echo "${BOLD}║       OpenClaw Skills 交互式安装工具          ║${NC}"
     echo "${BOLD}╚════════════════════════════════════════════════╝${NC}"
@@ -118,41 +117,43 @@ interactive_select() {
     old_stty=$(stty -g)
     stty -icanon -echo min 1 time 0
 
+    # 隐藏光标，退出时恢复
+    tput civis 2>/dev/null || true
+    trap 'tput cnorm 2>/dev/null; stty "$old_stty"' EXIT INT TERM
+
+    clear
     while true; do
+        # 归位 + 清除到底，避免闪烁
+        tput cup 0 0 2>/dev/null
+        tput ed 2>/dev/null
         show_menu
         echo "${BOLD}请选择要安装的 skills:${NC}"
-        echo "↑↓ 移动  空格 选中  a 全选  Enter 安装  q 退出"
+        echo "${CYAN}↑↓${NC} 移动  ${CYAN}空格${NC} 选中/取消  ${CYAN}a${NC} 全选/全取消  ${CYAN}Enter${NC} 安装  ${CYAN}q${NC} 退出"
         echo ""
 
         # 显示列表
         for ((i=0; i<total; i++)); do
             local skill="${skills[$i]}"
-            local checkbox="[ ]"
-            local cursor_mark="  "
+            local checkbox="${BOLD}[ ]${NC}"
             local status=""
-
-            # 光标位置
-            if [ $i -eq $cursor ]; then
-                cursor_mark="> "
-            fi
 
             # 选中状态
             if [ ${selected[$i]} -eq 1 ]; then
-                checkbox="[✓]"
+                checkbox="${GREEN}${BOLD}[✓]${NC}"
             fi
 
             # 安装状态
             if is_installed "$skill"; then
-                status="[已安装]"
+                status="${CYAN}[已安装]${NC}"
             else
-                status="[未安装]"
+                status="${YELLOW}[未安装]${NC}"
             fi
 
-            # 打印行
+            # 打印行：光标行高亮
             if [ $i -eq $cursor ]; then
-                echo "${cursor_mark}${checkbox} ${skill} ${status}"
+                echo "  ${checkbox} ${BOLD}${GREEN}▶ ${skill}${NC} ${status}"
             else
-                echo "  ${checkbox} ${skill} ${status}"
+                echo "  ${checkbox}   ${skill} ${status}"
             fi
         done
 
@@ -160,11 +161,11 @@ interactive_select() {
         local key
         IFS= read -r -n1 key
 
-        # 处理特殊键 (ESC 序列)
+        # 处理特殊键 (ESC 序列)，加 0.1s 超时避免卡住
         if [ "$key" = $'\x1b' ]; then
-            IFS= read -r -n1 key
+            IFS= read -r -t 0.1 -n1 key
             if [ "$key" = "[" ]; then
-                IFS= read -r -n1 key
+                IFS= read -r -t 0.1 -n1 key
                 case "$key" in
                     A) # 上箭头
                         ((cursor--))
@@ -206,6 +207,8 @@ interactive_select() {
                     break
                     ;;
                 q|Q) # 退出
+                    tput cnorm 2>/dev/null || true
+                    trap - EXIT INT TERM
                     stty "$old_stty"
                     clear
                     echo ""
@@ -217,6 +220,8 @@ interactive_select() {
     done
 
     # 恢复终端设置
+    tput cnorm 2>/dev/null || true
+    trap - EXIT INT TERM
     stty "$old_stty"
     clear
 
