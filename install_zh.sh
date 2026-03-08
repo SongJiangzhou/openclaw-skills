@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# install.sh - Interactive installer for OpenClaw skills
-# Tab/Space: select  Enter: confirm  Ctrl-A: select all  Esc: exit
+# install.sh - 交互式安装 OpenClaw skills 到目标目录
+# 空格: 选中/取消  回车: 确认安装  q: 退出
 
 set -e
 
-# Config
+# 配置
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skills"
 TARGET_DIR="$HOME/.openclaw/workspace/skills"
 
-# Color support detection
+# 检查终端是否支持颜色
 USE_COLOR=0
 if [ -t 1 ] && [ "$TERM" != "dumb" ] && command -v tput > /dev/null 2>&1; then
     if tput setaf 1 > /dev/null 2>&1; then
@@ -17,6 +17,7 @@ if [ -t 1 ] && [ "$TERM" != "dumb" ] && command -v tput > /dev/null 2>&1; then
     fi
 fi
 
+# 设置颜色变量（如果不支持则为空）
 if [ $USE_COLOR -eq 1 ]; then
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
@@ -26,68 +27,79 @@ if [ $USE_COLOR -eq 1 ]; then
     BOLD=$(tput bold)
     NC=$(tput sgr0)
 else
-    RED="" GREEN="" YELLOW="" BLUE="" CYAN="" BOLD="" NC=""
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    CYAN=""
+    BOLD=""
+    NC=""
 fi
 
-# Validate source directory
+# 检查源目录是否存在
 if [ ! -d "$SOURCE_DIR" ]; then
-    echo "Error: source directory not found: $SOURCE_DIR"
+    echo "错误: 源目录不存在: $SOURCE_DIR"
     exit 1
 fi
 
+# 创建目标目录（如果不存在）
 mkdir -p "$TARGET_DIR"
 
-# List available skills
+# 获取所有可用的 skills
 get_available_skills() {
     local skills=()
     for skill_path in "$SOURCE_DIR"/*/; do
-        [ -d "$skill_path" ] && skills+=("$(basename "$skill_path")")
+        if [ -d "$skill_path" ]; then
+            skills+=("$(basename "$skill_path")")
+        fi
     done
     echo "${skills[@]}"
 }
 
-# Check if a skill is already installed
+# 检查 skill 是否已安装
 is_installed() {
-    [ -d "$TARGET_DIR/$1" ]
+    local skill_name="$1"
+    [ -d "$TARGET_DIR/$skill_name" ]
 }
 
-# Install a single skill via symlink
+# 安装单个 skill 的函数
 install_skill() {
     local skill_name="$1"
     local source_path="$SOURCE_DIR/$skill_name"
     local target_path="$TARGET_DIR/$skill_name"
 
     if [ ! -d "$source_path" ]; then
-        echo "  ✗ Skill not found: $skill_name"
+        echo "  ✗ Skill 不存在: $skill_name"
         return 1
     fi
 
     if [ -e "$target_path" ]; then
-        echo "  → Removing old link: $skill_name"
+        echo "  → 删除旧链接: $skill_name"
         rm -rf "$target_path"
     fi
 
     ln -s "$source_path" "$target_path"
-    echo "  ✓ Linked: $skill_name"
+    echo "  ✓ 已链接: $skill_name"
 }
 
-# Print header banner
-show_header() {
+# 显示主菜单
+show_menu() {
     echo "${BOLD}╔════════════════════════════════════════════════╗${NC}"
-    echo "${BOLD}║        OpenClaw Skills Installer               ║${NC}"
+    echo "${BOLD}║       OpenClaw Skills 交互式安装工具          ║${NC}"
     echo "${BOLD}╚════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo "${CYAN}Source:${NC} $SOURCE_DIR"
-    echo "${CYAN}Target:${NC} $TARGET_DIR"
+    echo "${CYAN}源目录:${NC} $SOURCE_DIR"
+    echo "${CYAN}目标目录:${NC} $TARGET_DIR"
     echo ""
 }
 
-# Interactive multi-select via fzf
+# 交互式多选菜单（基于 fzf）
 interactive_select() {
+    # 检查 fzf 是否已安装
     if ! command -v fzf > /dev/null 2>&1; then
-        echo "${RED}Error: fzf not found${NC}"
+        echo "${RED}错误: 未找到 fzf${NC}"
         echo ""
-        echo "Install fzf first:"
+        echo "请先安装 fzf:"
         echo "  ${CYAN}Arch/CachyOS:${NC}  sudo pacman -S fzf"
         echo "  ${CYAN}Ubuntu/Debian:${NC} sudo apt install fzf"
         echo "  ${CYAN}macOS:${NC}         brew install fzf"
@@ -98,27 +110,27 @@ interactive_select() {
     local total=${#skills[@]}
 
     if [ $total -eq 0 ]; then
-        echo "No skills found."
+        echo "没有找到可用的 skills"
         return 1
     fi
 
-    # Build display list with install status
+    # 构建带状态标注的显示列表
     local items=()
     for skill in "${skills[@]}"; do
         if is_installed "$skill"; then
-            items+=("$(printf '%-35s \033[36m[installed]\033[0m' "$skill")")
+            items+=("$(printf '%-35s \033[36m[已安装]\033[0m' "$skill")")
         else
-            items+=("$(printf '%-35s \033[33m[not installed]\033[0m' "$skill")")
+            items+=("$(printf '%-35s \033[33m[未安装]\033[0m' "$skill")")
         fi
     done
 
-    # Run fzf multi-select
+    # 运行 fzf 多选
     local selected_lines
     selected_lines=$(printf '%s\n' "${items[@]}" | fzf \
         --multi \
         --ansi \
-        --prompt="  Select > " \
-        --header="↑↓ navigate  Tab/Space select  Ctrl-A select all  Enter confirm  Esc cancel" \
+        --prompt="  选择 > " \
+        --header="↑↓ 移动  Tab/空格 选中  Ctrl-A 全选  Enter 确认  Esc 退出" \
         --header-first \
         --bind="ctrl-a:select-all,ctrl-d:deselect-all" \
         --color="header:cyan,prompt:green,pointer:green,marker:green,hl:yellow,hl+:yellow" \
@@ -130,11 +142,11 @@ interactive_select() {
 
     if [ -z "$selected_lines" ]; then
         echo ""
-        echo "Nothing selected. Exiting."
+        echo "未选择任何 skill，退出"
         exit 0
     fi
 
-    # Extract skill names from fzf output
+    # 从 fzf 输出中提取 skill 名称（第一列）
     local to_install=()
     while IFS= read -r line; do
         local skill_name
@@ -143,39 +155,40 @@ interactive_select() {
     done <<< "$selected_lines"
 
     if [ ${#to_install[@]} -eq 0 ]; then
-        echo "Nothing selected. Exiting."
+        echo "未选择任何 skill，退出"
         exit 0
     fi
 
-    # Confirm
-    show_header
+    # 显示确认信息
+    echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "The following ${#to_install[@]} skill(s) will be installed:"
+    echo "将要安装以下 ${#to_install[@]} 个 skill(s):"
     echo ""
     for skill in "${to_install[@]}"; do
+        local status=""
         if is_installed "$skill"; then
-            echo "  ✓ ${skill} ${YELLOW}(will overwrite)${NC}"
-        else
-            echo "  ✓ ${skill}"
+            status="(将覆盖)"
         fi
+        echo "  ✓ ${skill} ${status}"
     done
     echo ""
-    echo -n "Confirm? [Y/n] "
+    echo -n "确认安装? [Y/n] "
     read -r confirm
 
     if [[ "$confirm" =~ ^[Nn]$ ]]; then
         echo ""
-        echo "Cancelled."
+        echo "已取消安装"
         exit 0
     fi
 
-    # Install
+    # 执行安装
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Installing..."
+    echo "开始安装..."
     echo ""
 
-    local success=0 failed=0
+    local success=0
+    local failed=0
 
     for skill in "${to_install[@]}"; do
         if install_skill "$skill"; then
@@ -185,23 +198,27 @@ interactive_select() {
         fi
     done
 
+    # 显示结果
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Done!"
+    echo "安装完成!"
     echo ""
-    echo "  ✓ Installed: $success"
-    [ $failed -gt 0 ] && echo "  ✗ Failed: $failed"
+    echo "  ✓ 成功: $success"
+    if [ $failed -gt 0 ]; then
+        echo "  ✗ 失败: $failed"
+    fi
     echo ""
 }
 
-# CLI mode: install skills passed as arguments
+# 命令行模式安装
 install_from_args() {
     local skills=("$@")
-    local success=0 failed=0
+    local success=0
+    local failed=0
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Installing specified skills..."
+    echo "开始安装指定的 skills..."
     echo ""
 
     for skill in "${skills[@]}"; do
@@ -214,17 +231,19 @@ install_from_args() {
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Done!"
+    echo "安装完成!"
     echo ""
-    echo "  ✓ Installed: $success"
-    [ $failed -gt 0 ] && echo "  ✗ Failed: $failed"
+    echo "  ✓ 成功: $success"
+    if [ $failed -gt 0 ]; then
+        echo "  ✗ 失败: $failed"
+    fi
     echo ""
 }
 
-# Entry point
+# 主逻辑
 if [ $# -eq 0 ]; then
     interactive_select
 else
-    show_header
+    show_menu
     install_from_args "$@"
 fi
