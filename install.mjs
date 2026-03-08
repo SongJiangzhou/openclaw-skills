@@ -122,12 +122,11 @@ async function runInteractive() {
     process.exit(0);
   }
 
-  const preview = selected.map(name =>
-    isInstalled(name)
-      ? `  ${color.green('✓')} ${name}  ${color.yellow(t.overwrite)}`
-      : `  ${color.green('✓')} ${name}`
-  );
-  p.note(preview.join('\n'), t.willInstall);
+  p.log.step(t.willInstall);
+  for (const name of selected) {
+    const suffix = isInstalled(name) ? `  ${color.yellow(t.overwrite)}` : '';
+    p.log.info(`${name}${suffix}`);
+  }
 
   const ok = await p.confirm({ message: t.proceed });
   if (p.isCancel(ok) || !ok) {
