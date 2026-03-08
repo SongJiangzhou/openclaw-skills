@@ -11,6 +11,48 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SOURCE_DIR = join(__dirname, 'skills');
 const TARGET_DIR = join(homedir(), '.openclaw', 'workspace', 'skills');
 
+// i18n
+const lang = process.env.INSTALLER_LANG === 'zh' ? 'zh' : 'en';
+
+const t = {
+  en: {
+    intro:          ' OpenClaw Skills Installer ',
+    noSkills:       `No skills found in ${SOURCE_DIR}`,
+    selectPrompt:   'Select skills to install',
+    installed:      'installed',
+    overwrite:      '(overwrite)',
+    willInstall:    'Will install',
+    proceed:        'Proceed?',
+    nothingSelected:'Nothing selected.',
+    cancelled:      'Cancelled.',
+    installing:     'Installing...',
+    done:           'Done',
+    results:        'Results',
+    outroOk:        n => `${n} skill(s) installed successfully`,
+    outroFail:      (s, f) => `Installed: ${s}  Failed: ${f}`,
+    cliInstalling:  n => `Installing ${n} skill(s)...`,
+  },
+  zh: {
+    intro:          ' OpenClaw Skills 安装器 ',
+    noSkills:       `在 ${SOURCE_DIR} 中未找到任何 skill`,
+    selectPrompt:   '选择要安装的 skills',
+    installed:      '已安装',
+    overwrite:      '(将覆盖)',
+    willInstall:    '将要安装',
+    proceed:        '确认安装?',
+    nothingSelected:'未选择任何内容。',
+    cancelled:      '已取消。',
+    installing:     '安装中...',
+    done:           '完成',
+    results:        '安装结果',
+    outroOk:        n => `成功安装 ${n} 个 skill`,
+    outroFail:      (s, f) => `成功: ${s}  失败: ${f}`,
+    cliInstalling:  n => `正在安装 ${n} 个 skill...`,
+  },
+}[lang];
+
+// Helpers
+
 function getSkills() {
   return readdirSync(SOURCE_DIR, { withFileTypes: true })
     .filter(d => d.isDirectory())
@@ -29,114 +71,97 @@ function installSkill(name) {
   symlinkSync(src, dst);
 }
 
+function buildResultLines(names) {
+  const ok = [], fail = [];
+  for (const name of names) {
+    try {
+      installSkill(name);
+      ok.push(`  ${color.green('✓')} ${name}`);
+    } catch (err) {
+      fail.push(`  ${color.red('✗')} ${name}  ${color.dim(err.message)}`);
+    }
+  }
+  return { lines: [...ok, ...fail], success: ok.length, failed: fail.length };
+}
+
+// Interactive mode
+
 async function runInteractive() {
-  p.intro(color.bgCyan(color.black(' OpenClaw Skills Installer ')));
+  p.intro(color.bgCyan(color.black(t.intro)));
 
   mkdirSync(TARGET_DIR, { recursive: true });
 
   const skills = getSkills();
   if (skills.length === 0) {
-    p.cancel(`No skills found in ${SOURCE_DIR}`);
+    p.cancel(t.noSkills);
     process.exit(1);
   }
 
   const selected = await p.multiselect({
-    message: 'Select skills to install',
+    message: t.selectPrompt,
     options: skills.map(name => ({
       value: name,
       label: name,
-      hint: isInstalled(name) ? color.cyan('installed') : '',
+      hint: isInstalled(name) ? color.cyan(t.installed) : '',
     })),
     required: false,
   });
 
   if (p.isCancel(selected) || selected.length === 0) {
-    p.cancel('Nothing selected.');
+    p.cancel(t.nothingSelected);
     process.exit(0);
   }
 
-  // Show what will happen
-  const lines = selected.map(name =>
+  const preview = selected.map(name =>
     isInstalled(name)
-      ? `  ${color.green('✓')} ${name}  ${color.yellow('(overwrite)')}`
+      ? `  ${color.green('✓')} ${name}  ${color.yellow(t.overwrite)}`
       : `  ${color.green('✓')} ${name}`
   );
-  p.note(lines.join('\n'), 'Will install');
+  p.note(preview.join('\n'), t.willInstall);
 
-  const ok = await p.confirm({ message: 'Proceed?' });
+  const ok = await p.confirm({ message: t.proceed });
   if (p.isCancel(ok) || !ok) {
-    p.cancel('Cancelled.');
+    p.cancel(t.cancelled);
     process.exit(0);
   }
 
-  // Install
   const s = p.spinner();
-  s.start('Installing...');
+  s.start(t.installing);
+  const { lines, success, failed } = buildResultLines(selected);
+  s.stop(t.done);
 
-  let success = 0;
-  let failed = 0;
-  const results = [];
-
-  for (const name of selected) {
-    try {
-      installSkill(name);
-      results.push(`  ${color.green('✓')} ${name}`);
-      success++;
-    } catch (err) {
-      results.push(`  ${color.red('✗')} ${name}  ${color.dim(err.message)}`);
-      failed++;
-    }
-  }
-
-  s.stop('Done');
-
-  p.note(results.join('\n'), 'Results');
+  p.note(lines.join('\n'), t.results);
 
   if (failed > 0) {
-    p.outro(color.yellow(`Installed: ${success}  Failed: ${failed}`));
+    p.outro(color.yellow(t.outroFail(success, failed)));
   } else {
-    p.outro(color.green(`${success} skill(s) installed successfully`));
+    p.outro(color.green(t.outroOk(success)));
   }
 }
 
+// CLI mode
+
 async function runCli(names) {
-  p.intro(color.bgCyan(color.black(' OpenClaw Skills Installer ')));
+  p.intro(color.bgCyan(color.black(t.intro)));
 
   mkdirSync(TARGET_DIR, { recursive: true });
 
   const s = p.spinner();
-  s.start(`Installing ${names.length} skill(s)...`);
+  s.start(t.cliInstalling(names.length));
+  const { lines, success, failed } = buildResultLines(names);
+  s.stop(t.done);
 
-  let success = 0;
-  let failed = 0;
-  const results = [];
-
-  for (const name of names) {
-    try {
-      installSkill(name);
-      results.push(`  ${color.green('✓')} ${name}`);
-      success++;
-    } catch (err) {
-      results.push(`  ${color.red('✗')} ${name}  ${color.dim(err.message)}`);
-      failed++;
-    }
-  }
-
-  s.stop('Done');
-
-  p.note(results.join('\n'), 'Results');
+  p.note(lines.join('\n'), t.results);
 
   if (failed > 0) {
-    p.outro(color.yellow(`Installed: ${success}  Failed: ${failed}`));
+    p.outro(color.yellow(t.outroFail(success, failed)));
   } else {
-    p.outro(color.green(`${success} skill(s) installed successfully`));
+    p.outro(color.green(t.outroOk(success)));
   }
 }
 
 // Entry point
+
 const args = process.argv.slice(2);
-if (args.length > 0) {
-  runCli(args).catch(err => { console.error(err); process.exit(1); });
-} else {
-  runInteractive().catch(err => { console.error(err); process.exit(1); });
-}
+const run = args.length > 0 ? runCli(args) : runInteractive();
+run.catch(err => { console.error(err); process.exit(1); });
