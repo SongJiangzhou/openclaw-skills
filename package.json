@@ -1,0 +1,12 @@
+{
+  "name": "openclaw-skills",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "install-skills": "node install.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "picocolors": "^1.1.1"
+  }
+}
