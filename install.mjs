@@ -2,14 +2,14 @@
 
 import * as p from '@clack/prompts';
 import color from 'picocolors';
-import { readdirSync, existsSync, mkdirSync, rmSync, symlinkSync } from 'fs';
+import { readdirSync, existsSync, rmSync, renameSync, cpSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SOURCE_DIR = join(__dirname, 'skills');
-const TARGET_DIR = join(homedir(), '.openclaw', 'workspace', 'skills');
+const DEST_DIR = join(homedir(), '.openclaw', 'workspace', 'skills');
 
 // i18n
 const lang = process.env.INSTALLER_LANG === 'zh' ? 'zh' : 'en';
@@ -26,11 +26,12 @@ const t = {
     nothingSelected:'Nothing selected.',
     cancelled:      'Cancelled.',
     installing:     'Installing...',
-    done:           'Done',
-    results:        'Results',
     outroOk:        n => `${n} skill(s) installed successfully`,
     outroFail:      (s, f) => `Installed: ${s}  Failed: ${f}`,
     cliInstalling:  n => `Installing ${n} skill(s)...`,
+    conflictPrompt: 'Some skills already exist in workspace/skills. How to handle conflicts?',
+    conflictDelete: 'Delete existing (recommended)',
+    conflictBackup: 'Backup as .bak',
   },
   zh: {
     intro:          ' OpenClaw Skills 安装器 ',
@@ -43,11 +44,12 @@ const t = {
     nothingSelected:'未选择任何内容。',
     cancelled:      '已取消。',
     installing:     '安装中...',
-    done:           '完成',
-    results:        '安装结果',
     outroOk:        n => `成功安装 ${n} 个 skill`,
     outroFail:      (s, f) => `成功: ${s}  失败: ${f}`,
     cliInstalling:  n => `正在安装 ${n} 个 skill...`,
+    conflictPrompt: '部分 skill 在 workspace/skills 中已存在，如何处理冲突？',
+    conflictDelete: '直接删除（推荐）',
+    conflictBackup: '备份为 .bak',
   },
 }[lang];
 
@@ -61,21 +63,29 @@ function getSkills() {
 }
 
 function isInstalled(name) {
-  return existsSync(join(TARGET_DIR, name));
+  return existsSync(join(DEST_DIR, name));
 }
 
-function installSkill(name) {
-  const src = join(SOURCE_DIR, name);
-  const dst = join(TARGET_DIR, name);
-  if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
-  symlinkSync(src, dst);
+function installSkill(name, conflictMode) {
+  const src  = join(SOURCE_DIR, name);
+  const dest = join(DEST_DIR, name);
+  if (existsSync(dest)) {
+    if (conflictMode === 'backup') {
+      const bak = dest + '.bak';
+      if (existsSync(bak)) rmSync(bak, { recursive: true });
+      renameSync(dest, bak);
+    } else {
+      rmSync(dest, { recursive: true });
+    }
+  }
+  cpSync(src, dest, { recursive: true });
 }
 
-function installAll(names) {
+function installAll(names, conflictMode) {
   const results = [];
   for (const name of names) {
     try {
-      installSkill(name);
+      installSkill(name, conflictMode);
       results.push({ name, ok: true });
     } catch (err) {
       results.push({ name, ok: false, err: err.message });
@@ -98,8 +108,6 @@ function logResults(results) {
 
 async function runInteractive() {
   p.intro(color.bgCyan(color.black(t.intro)));
-
-  mkdirSync(TARGET_DIR, { recursive: true });
 
   const skills = getSkills();
   if (skills.length === 0) {
@@ -134,9 +142,26 @@ async function runInteractive() {
     process.exit(0);
   }
 
+  const hasConflicts = selected.some(name => isInstalled(name));
+  let conflictMode = 'delete';
+  if (hasConflicts) {
+    const choice = await p.select({
+      message: t.conflictPrompt,
+      options: [
+        { value: 'delete', label: t.conflictDelete },
+        { value: 'backup', label: t.conflictBackup },
+      ],
+    });
+    if (p.isCancel(choice)) {
+      p.cancel(t.cancelled);
+      process.exit(0);
+    }
+    conflictMode = choice;
+  }
+
   const s = p.spinner();
   s.start(t.installing);
-  const results = installAll(selected);
+  const results = installAll(selected, conflictMode);
   const success = results.filter(r => r.ok).length;
   const failed  = results.filter(r => !r.ok).length;
   s.stop(failed > 0 ? t.outroFail(success, failed) : t.outroOk(success));
@@ -155,11 +180,9 @@ async function runInteractive() {
 async function runCli(names) {
   p.intro(color.bgCyan(color.black(t.intro)));
 
-  mkdirSync(TARGET_DIR, { recursive: true });
-
   const s = p.spinner();
   s.start(t.cliInstalling(names.length));
-  const results = installAll(names);
+  const results = installAll(names, 'delete');
   const success = results.filter(r => r.ok).length;
   const failed  = results.filter(r => !r.ok).length;
   s.stop(failed > 0 ? t.outroFail(success, failed) : t.outroOk(success));
