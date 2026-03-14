@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agent Search Routing"
-  short_description: "Route search requests to Exa, Tavily, or Brave based on intent."
-  default_prompt: "Use $agent-search-routing to choose the right search backend for this request."
