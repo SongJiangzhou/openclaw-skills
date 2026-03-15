@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROMPT=""
 SIZE="2K"
-WATERMARK="true"
+WATERMARK="false"
 MODEL="doubao-seedream-5-0-260128"
 OUTPUT_FORMAT="png"
 BASE_URL="${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}"

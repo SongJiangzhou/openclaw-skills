@@ -16,7 +16,7 @@ Default behavior:
 
 - Required: `prompt`
 - Optional: `size` (default `2K`)
-- Optional: `watermark` (`true` by default)
+- Optional: `watermark` (`false` by default)
 - Optional: `output-dir` (default `/home/lv5railgun/.openclaw/workspace/data/generated-images`)
 - Optional: `filename` (default auto-generated timestamp name)
 - Optional: `url-only` (skip download and print only the URL)
