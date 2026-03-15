@@ -5,6 +5,7 @@ PROMPT=""
 SIZE="2K"
 WATERMARK="true"
 MODEL="doubao-seedream-5-0-260128"
+OUTPUT_FORMAT="png"
 BASE_URL="${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}"
 OUTPUT_DIR="/home/lv5railgun/.openclaw/workspace/data/generated-images"
 FILENAME=""
@@ -63,12 +64,11 @@ payload=$(jq -n \
   --arg model "$MODEL" \
   --arg prompt "$PROMPT" \
   --arg size "$SIZE" \
-  --arg output_format "png" \
+  --arg output_format "$OUTPUT_FORMAT" \
   --arg response_format "url" \
-  --arg sequential_image_generation "disabled" \
   --argjson stream false \
   --argjson watermark "$WATERMARK" \
-  '{model:$model,prompt:$prompt,sequential_image_generation:$sequential_image_generation,response_format:$response_format,output_format:$output_format,size:$size,stream:$stream,watermark:$watermark}')
+  '{model:$model,prompt:$prompt,response_format:$response_format,output_format:$output_format,size:$size,stream:$stream,watermark:$watermark}')
 
 response=$(curl -sS -X POST "$BASE_URL/images/generations" \
   -H "Content-Type: application/json" \
@@ -91,7 +91,7 @@ mkdir -p "$OUTPUT_DIR"
 
 if [[ -z "$FILENAME" ]]; then
   ts=$(date '+%Y-%m-%d_%H%M%S')
-  FILENAME="doubao_${ts}.png"
+  FILENAME="doubao_${ts}.${OUTPUT_FORMAT}"
 fi
 
 case "$FILENAME" in
@@ -102,7 +102,16 @@ case "$FILENAME" in
 esac
 
 OUT_PATH="$OUTPUT_DIR/$FILENAME"
-curl -L -sS "$url" -o "$OUT_PATH"
+headers=$(mktemp)
+trap 'rm -f "$headers"' EXIT
+curl -L -sS -D "$headers" "$url" -o "$OUT_PATH"
+content_type=$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/ {print tolower($2)}' "$headers" | tr -d '\r' | tail -n1)
+
+if [[ "$OUTPUT_FORMAT" == "png" && "$content_type" != image/png* ]]; then
+  echo "Downloaded file is not image/png (got: ${content_type:-unknown})" >&2
+  rm -f "$OUT_PATH"
+  exit 1
+fi
 
 printf 'saved: %s\n' "$OUT_PATH"
 printf 'url: %s\n' "$url"

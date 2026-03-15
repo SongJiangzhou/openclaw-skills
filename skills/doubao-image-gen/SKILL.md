@@ -52,7 +52,7 @@ bash scripts/generate.sh --prompt '一辆复古列车冲出黑洞，电影感，
 Explicit output directory and file name:
 
 ```bash
-bash scripts/generate.sh --prompt '赛博朋克城市夜景，霓虹反射，雨夜街道，电影镜头感' --output-dir /tmp --filename city.jpeg
+bash scripts/generate.sh --prompt '赛博朋克城市夜景，霓虹反射，雨夜街道，电影镜头感' --output-dir /tmp --filename city.png
 ```
 
 URL only:
@@ -67,13 +67,13 @@ bash scripts/generate.sh --prompt '超现实主义海报' --url-only
 - On success with `--url-only`: print the URL directly
 - On failure: show the API error clearly
 - Do not claim success if the response does not contain `.data[0].url`
+- When downloading with default settings, validate that the downloaded file is actually `image/png`
 
 ## Notes
 
 - Default model is fixed to `doubao-seedream-5-0-260128`
 - Default response format is `url`
 - Default output image format is `png`
-- Default sequential image generation is `disabled`
 - Default streaming is `false`
 - If the API key is missing or invalid, report the exact problem
 
